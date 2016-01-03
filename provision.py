@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import subprocess as sp
-import sys
 import os
-import stat
 import time
 import shutil
 from jinja2 import Template
+import pexpect
+import sys
 
 machinectl = "/usr/bin/machinectl"
 
@@ -21,8 +21,12 @@ if not "y" in answer.lower():
     print("exiting")
     sys.exit()
 
-print("Bootstrapping service")
-sp.call([machinectl, "clone", "centos-template", hostname])
+print("Cloning template")
+#sp.call([machinectl, "clone", "centos-template", hostname])
+#workaround because machinectl clone is failing
+sp.call(['systemd-nspawn', '-D', os.path.join('/var/lib/machines', hostname), '--template', '/var/lib/machines/centos-template', '/usr/bin/date'])
+
+print("Configuring services")
 shutil.copyfile("configs/nspawn.template", "/etc/systemd/nspawn/%s.nspawn" % (hostname))
 
 with open("configs/host0.network.jinja", 'r') as template_file:
@@ -35,30 +39,19 @@ with open("/var/lib/machines/%s/etc/systemd/network/host0.network" % (hostname),
 with open("/var/lib/machines/%s/etc/hosts" % (hostname), 'a') as hosts:
     hosts.write("%s %s.%s %s" % (ip, hostname, domain, hostname))
 
-with open("/var/lib/machines/%s/etc/hostname" % (hostname), 'a') as hosts:
+with open("/var/lib/machines/%s/etc/hostname" % (hostname), 'w') as hosts:
     hosts.write("%s" % (hostname, ))
-    
-with open("/var/lib/machines/%s/firstboot.sh" % (hostname), 'w') as script:
-    lines = ["#!/bin/bash"]
-    lines.append("echo 'root:%s' | chpasswd" % (rpw, ))
-    lines.append("ln -sf /dev/null /etc/systemd/network/80-container-host0.network")
-    lines.append("systemctl enable systemd-networkd")
-    lines.append("systemctl enable systemd-resolved")
-    lines.append("rm /etc/resolv.conf")
-    lines.append("ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf")
-    lines.append("systemctl enable salt-minion")
-    lines.append("systemctl enable sssd")
-    lines.append("mkdir /etc/salt")
-    lines.append("echo %s > /etc/salt/minion_id" % hostname)
-    script.write("\n".join(lines))
 
-os.chmod("/var/lib/machines/%s/firstboot.sh" % (hostname), stat.S_IRWXU)
+with open("/var/lib/machines/%s/etc/salt/minion_id" % (hostname), 'w') as minion:
+    minion.write("%s" % (hostname, ))
+
+print("Setting root password")
+container = pexpect.spawn("systemd-nspawn -D %s" % os.path.join('/var/lib/machines', hostname))
+container.sendline("echo 'root:%s' | chpasswd" % (rpw, ))
+container.close()
+
+print("Configuring salt")
 sp.call([machinectl, 'start', hostname])
-time.sleep(2)
-sp.call([machinectl, 'shell', hostname, '/firstboot.sh'])
-sp.call([machinectl, 'reboot', hostname])
 time.sleep(1)
-sp.call([machinectl, 'start', hostname])
-time.sleep(1)
-sp.call([machinectl, 'shell', 'salt', '/usr/bin/salt-key -y -a %s' % (hostname)])
+#sp.call([machinectl, 'shell', 'salt', '/usr/bin/salt-key -y -a %s' % (hostname)])
 sp.call([machinectl, 'shell', hostname, '/usr/bin/salt-call state.highstate'])

@@ -30,8 +30,8 @@ class Fetch(object):
         index_url =  base_url + "/meta/1.0/index-system"
         url = ""
 
-        if os.path.exists(self.dest):
-            print("Container already downloaded to %s" % (self.dest,))
+        if os.path.exists(self.source):
+            print("Container already downloaded to %s" % (self.source,))
             return
 
         print("Finding newest centos container")
@@ -67,6 +67,7 @@ class Fetch(object):
         print("Configuring container template")
         shutil.copyfile("configs/saltstack.repo",
                         os.path.join(self.dest, 'etc/yum.repos.d/saltstack.repo'))
+        os.mkdir(os.path.join(self.dest, 'etc/systemd/network'))
         container = pexpect.spawn("systemd-nspawn -D %s" % self.dest)
         container.expect(prompt_string)
         container.sendline("rpm --import https://repo.saltstack.com/yum/redhat/7/x86_64/latest/SALTSTACK-GPG-KEY.pub")
@@ -75,7 +76,7 @@ class Fetch(object):
         container.expect(prompt_string)
         container.sendline("yum update")
         container.expect(prompt_string, timeout = 120)
-        container.sendline("yum install -y salt-minion systemd-networkd systemd-resolved")
+        container.sendline("yum install -y salt-minion systemd-networkd systemd-resolved ipa-client")
         container.expect(prompt_string, timeout = 600)
         container.sendline("systemctl enable salt-minion")
         container.expect(prompt_string)
@@ -84,6 +85,8 @@ class Fetch(object):
         container.sendline("systemctl enable systemd-networkd")
         container.expect(prompt_string)
         container.sendline("systemctl enable systemd-resolved")
+        container.expect(prompt_string)
+        container.sendline("systemctl enable sssd")
         container.expect(prompt_string)
         os.remove(os.path.join(self.dest, "etc/resolv.conf"))
         os.remove(os.path.join(self.dest, "usr/lib/systemd/system/rhel-dmesg.service"))
