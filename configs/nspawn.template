@@ -1,0 +1,5 @@
+[Exec]
+Boot=True
+
+[Network]
+Bridge=br0 
