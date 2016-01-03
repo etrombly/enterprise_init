@@ -5,6 +5,8 @@ import sys
 import os
 import stat
 import time
+import shutil
+from jinja2 import Template
 
 machinectl = "/usr/bin/machinectl"
 
@@ -20,18 +22,15 @@ if not "y" in answer.lower():
     sys.exit()
 
 print("Bootstrapping service")
-with open("/etc/systemd/nspawn/%s.nspawn" % (hostname), 'w') as nspawn_file:
-    nspawn_file.write("[Exec]\nBoot=True\n\n[Network]\nBridge=br0")
+sp.call([machinectl, "clone", "centos-template", hostname])
+shutil.copyfile("configs/nspawn.template", "/etc/systemd/nspawn/%s.nspawn" % (hostname))
 
-sp.call([machinectl, "clone", "arch", hostname])
-
+with open("configs/host0.network.jinja", 'r') as template_file:
+    template = Template(template_file.read())
+    output = template.render(ip='test', gateway='test', dns='test', domain='test')
+    
 with open("/var/lib/machines/%s/etc/systemd/network/host0.network" % (hostname), 'w') as network:
-    lines = ["[Match]\nName=host0\n[Network]"]
-    lines.append("Address=%s/24" % (ip, ))
-    lines.append("Gateway=192.168.0.1")
-    lines.append("DNS=192.168.0.2")
-    lines.append("Domains=%s" % (domain, ))
-    network.write("\n".join(lines))
+    network.write(output)
 
 with open("/var/lib/machines/%s/etc/hosts" % (hostname), 'a') as hosts:
     hosts.write("%s %s.%s %s" % (ip, hostname, domain, hostname))
