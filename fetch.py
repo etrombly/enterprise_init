@@ -89,7 +89,7 @@ class Fetch(object):
         container.sendline("systemctl enable sssd")
         container.expect(prompt_string)
         os.remove(os.path.join(self.dest, "etc/resolv.conf"))
-        os.remove(os.path.join(self.dest, "usr/lib/systemd/system/rhel-dmesg.service"))
+        #os.remove(os.path.join(self.dest, "usr/lib/systemd/system/rhel-dmesg.service"))
         container.sendline("ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf")
         container.expect(prompt_string)
         container.close()

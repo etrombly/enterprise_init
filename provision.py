@@ -31,7 +31,7 @@ shutil.copyfile("configs/nspawn.template", "/etc/systemd/nspawn/%s.nspawn" % (ho
 
 with open("configs/host0.network.jinja", 'r') as template_file:
     template = Template(template_file.read())
-    output = template.render(ip='test', gateway='test', dns='test', domain='test')
+    output = template.render(ip='192.168.0.9/24', gateway='192.168.0.1', dns='192.168.0.2', domain='etromb.local')
     
 with open("/var/lib/machines/%s/etc/systemd/network/host0.network" % (hostname), 'w') as network:
     network.write(output)
@@ -47,11 +47,22 @@ with open("/var/lib/machines/%s/etc/salt/minion_id" % (hostname), 'w') as minion
 
 print("Setting root password")
 container = pexpect.spawn("systemd-nspawn -D %s" % os.path.join('/var/lib/machines', hostname))
-container.sendline("echo 'root:%s' | chpasswd" % (rpw, ))
+container.expect('login:')
+container.sendline('root')
+container.expect('Password:')
+container.sendline('root')
+container.expect('UNIX password:')
+container.sendline('root')
+container.expect('new password:')
+container.sendline(rpw)
+container.expect('new password:')
+container.sendline(rpw)
 container.close()
 
 print("Configuring salt")
 sp.call([machinectl, 'start', hostname])
 time.sleep(1)
 #sp.call([machinectl, 'shell', 'salt', '/usr/bin/salt-key -y -a %s' % (hostname)])
-sp.call([machinectl, 'shell', hostname, '/usr/bin/salt-call state.highstate'])
+container = pexpect.spawn([machinectl, 'login', hostname])
+# '/usr/bin/salt-call state.highstate'
+# ipa-client-install --domain=etromb.local --mkhomedir --enable-dns-updates --server=ipa.etromb.local -w 'test' --hostname=test.etromb.local -U -p admin
