@@ -7,17 +7,24 @@ import shutil
 from jinja2 import Template
 import pexpect
 import sys
+import configparser
 
 machinectl = "/usr/bin/machinectl"
+config = configparser.ConfigParser()
+config.read('config.ini')
+domain = config['Globals']['Domain']
+dns = config['Globals']['dns']
+gateway = config['Globals']['Gateway']
 
 print("Provisioning new service")
 hostname = input("Hostname?")
-rpw = input("Root password?")
-answer = input("Proceed with %s, %s?" % (hostname, rpw))
+answer = input("Proceed with %s?" % (hostname))
 
 if not "y" in answer.lower():
     print("exiting")
     sys.exit()
+    
+ip = config[hostname]['ip']
 
 print("Cloning template")
 sp.call([machinectl, "clone", "centos-template", hostname])
