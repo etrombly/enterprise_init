@@ -13,9 +13,10 @@ class Fetch(object):
         self.cleanup = cleanup
         self.root_file = "rootfs.tar.xz"
         self.source =  "/tmp/" +  self.root_file
-        if os.path.exists(self.dest):
-            shutil.rmtree(self.dest)
-        os.mkdir(self.dest)
+        #change to check machinectl list-images
+        #if os.path.exists(self.dest):
+        #    shutil.rmtree(self.dest)
+        #os.mkdir(self.dest)
 
     def fetch(self):
         try:
@@ -55,8 +56,10 @@ class Fetch(object):
 
     def extract(self):
         print("Extracting container")
-        with tarfile.open(self.source, 'r:xz') as rootfs:
-            rootfs.extractall(self.dest)
+       # with tarfile.open(self.source, 'r:xz') as rootfs:
+       #     rootfs.extractall(self.dest)
+        container = pexpect.spawn('machinectl import-tar %s %s' % (self.source, self.name))
+        container.expect("Exiting")
         if self.cleanup:
             print("Removing archive")
             os.remove(self.source)
