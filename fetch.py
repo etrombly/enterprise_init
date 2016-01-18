@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 import urllib.request
-import shutil
-import tarfile
 import os
 import shutil
 import pexpect
+import Machinectl
 
 class Fetch(object):
     def __init__(self, name, cleanup = False):
@@ -13,10 +12,12 @@ class Fetch(object):
         self.cleanup = cleanup
         self.root_file = "rootfs.tar.xz"
         self.source =  "/tmp/" +  self.root_file
-        #change to check machinectl list-images
-        #if os.path.exists(self.dest):
-        #    shutil.rmtree(self.dest)
-        #os.mkdir(self.dest)
+        self.ctl = Machinectl.Machinectl()
+
+        images = self.ctl.list_images()
+        if self.name in images:
+            print("Removing old template")
+            self.ctl.remove_image(self.name)
 
     def fetch(self):
         try:
@@ -32,7 +33,7 @@ class Fetch(object):
         url = ""
 
         if os.path.exists(self.source):
-            print("Container already downloaded to %s" % (self.source,))
+            print("Image already downloaded to %s" % (self.source,))
             return
 
         print("Finding newest centos container")
@@ -55,19 +56,17 @@ class Fetch(object):
         print("Download finished")
 
     def extract(self):
-        print("Extracting container")
-       # with tarfile.open(self.source, 'r:xz') as rootfs:
-       #     rootfs.extractall(self.dest)
-        container = pexpect.spawn('machinectl import-tar %s %s' % (self.source, self.name))
-        container.expect("Exiting")
+        print("Extracting image")
+        self.ctl.import_tar(self.source, self.name)
         if self.cleanup:
-            print("Removing archive")
+            print("Removing image")
             os.remove(self.source)
         print("Extraction finished")
 
     def configure(self):
         prompt_string = "~\]#"
         print("Configuring container template")
+        print("    configuring saltstack repo")
         shutil.copyfile("configs/saltstack.repo",
                         os.path.join(self.dest, 'etc/yum.repos.d/saltstack.repo'))
         os.mkdir(os.path.join(self.dest, 'etc/systemd/network'))
@@ -79,8 +78,10 @@ class Fetch(object):
         container.expect(prompt_string)
         container.sendline("yum update")
         container.expect(prompt_string, timeout = 120)
+        print("    installing packages")
         container.sendline("yum install -y salt-minion systemd-networkd systemd-resolved ipa-client")
         container.expect(prompt_string, timeout = 600)
+        print("    enabling services")
         container.sendline("systemctl enable salt-minion")
         container.expect(prompt_string)
         container.sendline("systemctl disable network")
