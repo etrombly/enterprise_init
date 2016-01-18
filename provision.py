@@ -31,6 +31,24 @@ if not config[role]:
 ip = config[role]['IP']
 hostname = config[role]['Hostname']
 fqdn = "%s.%s" % (hostname, domain)
+import configparser
+
+machinectl = "/usr/bin/machinectl"
+config = configparser.ConfigParser()
+config.read('config.ini')
+domain = config['Globals']['Domain']
+dns = config['Globals']['dns']
+gateway = config['Globals']['Gateway']
+
+print("Provisioning new service")
+hostname = input("Hostname?")
+answer = input("Proceed with %s?" % (hostname))
+
+if not "y" in answer.lower():
+    print("exiting")
+    sys.exit()
+    
+ip = config[hostname]['ip']
 
 print("Cloning template")
 ctl.clone("centos-template", hostname)
