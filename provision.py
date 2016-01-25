@@ -109,5 +109,3 @@ class Provision(object):
         container.sendline("authconfig --enablemkhomedir --update")
         container.expect(self.prompt_string)
         container.close()
-        with open("/var/lib/machines/%s/etc/resolv.conf" % self.hostname, 'w') as resolv:
-            resolv.write('nameserver %s\nsearch %s' % (self.ip, self.domain))
