@@ -103,7 +103,7 @@ class Provision(object):
         container.expect(self.prompt_string)
         container.sendline("yum install -y ipa-server ipa-server-dns")
         container.expect(self.prompt_string, timeout = 600)
-        container.sendline("ipa-server-install -n %s -r %s -p '%s' -a '%s' --hostname=%s --setup-dns --forwarder=%s-U" %
+        container.sendline("ipa-server-install -n %s -r %s -p '%s' -a '%s' --hostname=%s --setup-dns --forwarder=%s -U" %
                            (self.domain, self.realm, self.ipapw, self.ipapw, self.fqdn, self.config['Roles']['IPA']['DNS']))
         container.expect(self.prompt_string, timeout = 1200)
         container.sendline("authconfig --enablemkhomedir --update")
