@@ -1,109 +1,113 @@
 #!/usr/bin/env python3
 
-import subprocess as sp
-import os
 import time
 import shutil
 from jinja2 import Template
-import pexpect
 import sys
 import Machinectl
-import configparser
+import yaml
 
-ctl = Machinectl.Machinectl()
-prompt_string = "~\]#"
-config = configparser.ConfigParser()
-config.read('config.ini')
+class Provision(object):
+    def __init__(self, role):
+        self.ctl = Machinectl.Machinectl()
+        self.prompt_string = "~\]#"
+        with open('config.yaml') as config_file:
+            self.config = yaml.safe_load(config_file)
 
-gateway=config['GLOBAL']['Gateway']
-dns=config['IPA']['IP']
-domain=config['GLOBAL']['Domain']
-rpw =config['GLOBAL']['RootPW']
-ipa_server = "%s.%s" % (config['IPA']['Hostname'], domain)
+        self.gateway = self.config['Globals']['Gateway']
+        self.dns = self.config['Roles']['IPA']['IP']
+        self.domain = self.config['Globals']['Domain']
+        self.realm = self.config['Globals']['Realm']
+        self.rpw  = self.config['Globals']['RootPW']
+        self.ipapw = self.config['Globals']['IPAPW']
+        self.ipa_server = "%s.%s" % (self.config['Roles']['IPA']['Hostname'], self.domain)
+        self.role = role
 
-print("Provisioning new service")
-role = input("Role?").upper()
+        if not self.config['Roles'][role]:
+            print("Role not in config.ini")
+            sys.exit(1)
 
-if not config[role]:
-    print("Role not in config.ini")
-    sys.exit(1)
+        self.ip = self.config['Roles'][self.role]['IP']
+        self.hostname = self.config['Roles'][self.role]['Hostname']
+        self.fqdn = "%s.%s" % (self.hostname, self.domain)
 
-ip = config[role]['IP']
-hostname = config[role]['Hostname']
-fqdn = "%s.%s" % (hostname, domain)
-import configparser
+    def clone(self, template):
+        self.ctl.clone(template, self.hostname)
 
-machinectl = "/usr/bin/machinectl"
-config = configparser.ConfigParser()
-config.read('config.ini')
-domain = config['Globals']['Domain']
-dns = config['Globals']['dns']
-gateway = config['Globals']['Gateway']
+    def configure(self):
+        shutil.copyfile("configs/nspawn.template", "/etc/systemd/nspawn/%s.nspawn" % (self.hostname))
 
-print("Provisioning new service")
-hostname = input("Hostname?")
-answer = input("Proceed with %s?" % (hostname))
+        with open("configs/host0.network.jinja", 'r') as template_file:
+            template = Template(template_file.read())
+            output = template.render(ip = self.ip, gateway = self.gateway,
+                                     dns = self.dns, domain = self.domain)
 
-if not "y" in answer.lower():
-    print("exiting")
-    sys.exit()
-    
-ip = config[hostname]['ip']
+        with open("/var/lib/machines/%s/etc/systemd/network/host0.network" % self.hostname, 'w') as network:
+            network.write(output)
 
-print("Cloning template")
-ctl.clone("centos-template", hostname)
+        with open("/var/lib/machines/%s/etc/hosts" % self.hostname, 'a') as hosts:
+            hosts.write("%s %s.%s %s" % (self.ip, self.hostname, self.domain, self.hostname))
 
-print("Configuring services")
-shutil.copyfile("configs/nspawn.template", "/etc/systemd/nspawn/%s.nspawn" % (hostname))
+        with open("/var/lib/machines/%s/etc/hostname" % self.hostname, 'w') as hosts:
+            hosts.write("%s" % self.hostname)
 
-with open("configs/host0.network.jinja", 'r') as template_file:
-    template = Template(template_file.read())
-    output = template.render(ip=ip, gateway=gateway, dns=dns, domain=domain)
-    
-with open("/var/lib/machines/%s/etc/systemd/network/host0.network" % (hostname), 'w') as network:
-    network.write(output)
+        with open("/var/lib/machines/%s/etc/salt/minion_id" % self.hostname, 'w') as minion:
+            minion.write("%s" % self.hostname)
 
-with open("/var/lib/machines/%s/etc/hosts" % (hostname), 'a') as hosts:
-    hosts.write("%s %s.%s %s" % (ip, hostname, domain, hostname))
+        self.ctl.start(self.hostname)
+        time.sleep(2)
+        container = self.ctl.login(self.hostname)
+        container.expect('login:')
+        container.sendline('root')
+        container.expect('Password:')
+        container.sendline('root')
+        container.expect('password:')
+        container.sendline('root')
+        container.expect('password:')
+        container.sendline(self.rpw)
+        container.expect('password:')
+        container.sendline(self.rpw)
+        container.expect(self.prompt_string)
+        container.close()
 
-with open("/var/lib/machines/%s/etc/hostname" % (hostname), 'w') as hosts:
-    hosts.write("%s" % (hostname, ))
+    def saltClient(self):
+        #TODO check if salt is running, start if not
+        salt = self.ctl.login('salt', 'root', self.rpw)
+        salt.expect('login:')
+        salt.sendline('root')
+        salt.expect('Password:')
+        salt.sendline(self.rpw)
+        salt.expect(self.prompt_string)
+        salt.sendline('/usr/bin/salt-key -y -a %s' % self.hostname)
+        salt.expect(self.prompt_string)
+        salt.close()
 
-with open("/var/lib/machines/%s/etc/salt/minion_id" % (hostname), 'w') as minion:
-    minion.write("%s" % (hostname, ))
+    def saltMaster(self):
+        container = self.ctl.login(self.hostname, 'root', self.rpw)
+        container.sendline("yum install -y salt-master")
+        container.expect(self.prompt_string, timeout = 600)
+        container.sendline("systemctl enable salt-master --now")
+        container.expect(self.prompt_string)
+        container.close()
 
-print("Setting root password")
-ctl.start(hostname)
-time.sleep(1)
-container = ctl.login(hostname)
-container.expect('login:')
-container.sendline('root')
-container.expect('Password:')
-container.sendline('root')
-container.expect('password:')
-container.sendline('root')
-container.expect('password:')
-container.sendline(rpw)
-container.expect('password:')
-container.sendline(rpw)
+    def ipaClient(self):
+        container = self.ctl.login(self.hostname, 'root', self.rpw)
+        container.sendline("ipa-client-install -n %s --mkhomedir --enable-dns-updates --server=%s -w '%s' --hostname=%s -U -p admin" %
+                           (self.domain, self.ipa_server, self.ipapw, self.fqdn))
+        container.expect(self.prompt_string)
+        container.close()
 
-print("Configuring salt")
-#check if salt is running, start if not
-salt = ctl.login('salt')
-salt.expect('login:')
-salt.sendline('root')
-salt.expect('Password:')
-salt.sendline(rpw)
-salt.expect(prompt_string)
-salt.sendline('/usr/bin/salt-key -y -a %s' % (hostname))
-salt.expect(prompt_string)
-print(salt.before)
-#time.sleep(1)
-#container.sendline('salt-call state.highstate')
-#container.expect(prompt_string)
-#print(container.before)
-
-print("Adding to domain")
-container.sendline("ipa-client-install --domain=%s --mkhomedir --enable-dns-updates --server=%s -w '%s' --hostname=%s -U -p admin" % (domain, ipa_server, config['GLOBAL']['IPAPW'], fqdn))
-container.expect(prompt_string)
-print(container.before)
+    def ipaMaster(self):
+        container = self.ctl.login(self.hostname, 'root', self.rpw)
+        container.sendline("echo nameserver %s > /etc/resolv.conf" % self.config['Roles']['IPA']['DNS'])
+        container.expect(self.prompt_string)
+        container.sendline("yum install -y ipa-server ipa-server-dns")
+        container.expect(self.prompt_string, timeout = 600)
+        container.sendline("ipa-server-install -n %s -r %s -p '%s' -a '%s' --hostname=%s --setup-dns --forwarder=%s-U" %
+                           (self.domain, self.realm, self.ipapw, self.ipapw, self.fqdn, self.config['Roles']['IPA']['DNS']))
+        container.expect(self.prompt_string, timeout = 1200)
+        container.sendline("authconfig --enablemkhomedir --update")
+        container.expect(self.prompt_string)
+        container.close()
+        with open("/var/lib/machines/%s/etc/resolv.conf" % self.hostname, 'w') as resolv:
+            resolv.write('nameserver %s\nsearch %s' % (self.ip, self.domain))

@@ -1,0 +1,28 @@
+Globals:
+  Domain: etromb.local
+  Realm: ETROMB.LOCAL
+  Gateway: 192.168.0.1
+  RootPW: TY56%^ty
+  IPAPW: password
+Roles:
+  IPA:
+    Install: True
+    IP: 192.168.0.2
+    Hostname: ipa
+    DNS: 192.168.0.1
+  SALT:
+    Install: True
+    IP: 192.168.0.3
+    Hostname: salt
+  DHCP:
+    Install: True
+    IP: 192.168.0.4
+    Hostname: dhcp
+  SAMBA:
+    Install: True
+    IP: 192.168.0.5
+    Hostname: file1
+  TEST:
+    Install: True
+    IP: 192.168.0.6/24
+    Hostname: test

@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
 
 import pexpect
+import sys
 
 class Machinectl(object):
     def __init__(self):
-        pass
+        self.prompt_string = "~\]#"
 
     def start(self, name):
         pexpect.run('machinectl start %s' % name)
 
-    def login(self, name):
-        return pexpect.spawn('machinectl login %s' % name)
+    def login(self, name, user = None, pw = None):
+        shell = pexpect.spawnu('machinectl login %s' % name, logfile = sys.stdout)
+        if (user is not None) and (pw is not None):
+            shell.expect('login:')
+            shell.sendline(user)
+            shell.expect('Password:')
+            shell.sendline(pw)
+            shell.expect(self.prompt_string)
+        return shell
 
     def import_tar(self, source, name):
         shell = pexpect.spawn('machinectl import-tar %s %s' % (source, name))

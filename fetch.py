@@ -22,8 +22,8 @@ class Fetch(object):
     def fetch(self):
         try:
             self.download()
-        except :
-            pass
+        except urllib.error.URLError as e:
+            print(e.args[1])
         self.extract()
         self.configure()
 
