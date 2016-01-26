@@ -73,11 +73,6 @@ class Provision(object):
     def saltClient(self):
         #TODO check if salt is running, start if not
         salt = self.ctl.login('salt', 'root', self.rpw)
-        salt.expect('login:')
-        salt.sendline('root')
-        salt.expect('Password:')
-        salt.sendline(self.rpw)
-        salt.expect(self.prompt_string)
         salt.sendline('/usr/bin/salt-key -y -a %s' % self.hostname)
         salt.expect(self.prompt_string)
         salt.close()
@@ -92,9 +87,9 @@ class Provision(object):
 
     def ipaClient(self):
         container = self.ctl.login(self.hostname, 'root', self.rpw)
-        container.sendline("ipa-client-install -n %s --mkhomedir --enable-dns-updates --server=%s -w '%s' --hostname=%s -U -p admin" %
+        container.sendline("ipa-client-install --domain=%s --mkhomedir --enable-dns-updates --server=%s -w '%s' --hostname=%s -U -p admin" %
                            (self.domain, self.ipa_server, self.ipapw, self.fqdn))
-        container.expect(self.prompt_string)
+        container.expect(self.prompt_string, timeout=90)
         container.close()
 
     def ipaMaster(self):
