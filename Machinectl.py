@@ -22,7 +22,7 @@ class Machinectl(object):
 
     def import_tar(self, source, name):
         shell = pexpect.spawn('machinectl import-tar %s %s' % (source, name))
-        shell.expect("Exiting")
+        shell.expect("Exiting", timeout = 300)
 
     def list(self):
         results = pexpect.run('machinectl list')
