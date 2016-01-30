@@ -10,6 +10,9 @@ class Machinectl(object):
     def start(self, name):
         pexpect.run('machinectl start %s' % name)
 
+    def status(self, name):
+        return pexpect.run('systemctl status systemd-nspawn@%s' % name)
+
     def login(self, name, user = None, pw = None):
         shell = pexpect.spawnu('machinectl login %s' % name, logfile = sys.stdout)
         if (user is not None) and (pw is not None):

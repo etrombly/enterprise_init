@@ -6,6 +6,7 @@ from jinja2 import Template
 import sys
 import Machinectl
 import yaml
+import os
 
 class Provision(object):
     def __init__(self, role):
@@ -34,8 +35,17 @@ class Provision(object):
     def clone(self, template):
         self.ctl.clone(template, self.hostname)
 
+    def login(self):
+        return self.ctl.login(self.hostname, 'root', self.rpw)
+
     def configure(self):
-        shutil.copyfile("configs/nspawn.template", "/etc/systemd/nspawn/%s.nspawn" % (self.hostname))
+        if not os.path.exists("/etc/systemd/nspawn"):
+            os.mkdir("/etc/systemd/nspawn")
+
+        if "ipa" in self.hostname:
+            shutil.copyfile("configs/ipa.nspawn.template", "/etc/systemd/nspawn/ipa.nspawn")
+        else:
+            shutil.copyfile("configs/nspawn.template", "/etc/systemd/nspawn/%s.nspawn" % (self.hostname))
 
         with open("configs/host0.network.jinja", 'r') as template_file:
             template = Template(template_file.read())
@@ -55,7 +65,9 @@ class Provision(object):
             minion.write("%s" % self.hostname)
 
         self.ctl.start(self.hostname)
-        time.sleep(2)
+        while b'dbus' not in self.ctl.status(self.hostname):
+            print(self.ctl.status(self.hostname))
+            time.sleep(.5)
         container = self.ctl.login(self.hostname)
         container.expect('login:')
         container.sendline('root')
@@ -78,6 +90,8 @@ class Provision(object):
         salt.close()
 
     def saltMaster(self):
+        os.rmdir('/var/lib/machines/%s/srv' % self.hostname)
+        shutil.copytree('configs/srv', '/var/lib/machines/%s/srv' % self.hostname)
         container = self.ctl.login(self.hostname, 'root', self.rpw)
         container.sendline("yum install -y salt-master")
         container.expect(self.prompt_string, timeout = 600)

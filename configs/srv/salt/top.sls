@@ -1,3 +1,5 @@
 base:
-    'dhcp':
-        - ipa-client
+    'squid':
+        - squid
+    '*':
+        - squid-client

@@ -9,7 +9,7 @@ Roles:
     Install: True
     IP: 192.168.0.2
     Hostname: ipa
-    DNS: 192.168.0.1
+    DNS: 8.8.8.8
   SALT:
     Install: True
     IP: 192.168.0.3
@@ -22,7 +22,7 @@ Roles:
     Install: True
     IP: 192.168.0.5
     Hostname: file1
-  TEST:
+  SQUID:
     Install: True
-    IP: 192.168.0.6/24
-    Hostname: test
+    IP: 192.168.0.6
+    Hostname: squid
