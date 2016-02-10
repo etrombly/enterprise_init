@@ -1,0 +1,6 @@
+[Exec]
+Boot=True
+Capability=CAP_SYS_TIME
+
+[Network]
+Bridge=br0 
